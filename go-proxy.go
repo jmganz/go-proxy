@@ -9,6 +9,7 @@ import "encoding/binary"
 import "github.com/ghedo/go.pkt/capture/pcap"
 //import "github.com/ghedo/go.pkt/filter"
 import "github.com/ghedo/go.pkt/layers"
+import "github.com/ghedo/go.pkt/network"
 import "github.com/ghedo/go.pkt/packet"
 import "github.com/ghedo/go.pkt/packet/udp"
 import "github.com/ghedo/go.pkt/packet/ipv4"
@@ -23,13 +24,13 @@ func main() {
     log.Fatal(err)
   }
   defer src.Close()
-
+/*
   dst, err := pcap.Open("ark0")
   if err != nil {
     log.Fatal(err)
   }
   defer dst.Close()
-
+*/
   // you may configure the source further, e.g. by activating
   // promiscuous mode.
 
@@ -37,12 +38,12 @@ func main() {
   if err != nil {
     log.Fatal(err)
   }
-
+/*
   err = dst.Activate()
   if err != nil {
     log.Fatal(err)
   }
-
+*/
   for {
     buf, err := src.Capture()
     if err != nil {
@@ -99,8 +100,12 @@ func main() {
           ip4_pkt.Flags = 10
           ip4_pkt.TTL = uint8(buf[22])
           ip4_pkt.Protocol = ipv4.UDP
-          ip4_pkt.Checksum = 0x51a9 // TODO: compute this properly
-          ip4_pkt.SrcAddr = buf[56:60]
+          //ip4_pkt.Checksum = 0x51a9 // TODO: compute this properly
+          log.Println("*** SOURCE ADDRESSES ***")
+          log.Println(buf[56:60])
+          //ip4_pkt.SrcAddr = buf[56:60]
+          log.Println(buf[72:76])
+          ip4_pkt.SrcAddr = buf[72:76]
           //ip4_pkt.DstAddr = buf[72:76]
           ip4_pkt.DstAddr = buf[30:34]
           log.Println(ip4_pkt)
@@ -111,13 +116,14 @@ func main() {
           fwd_udp.DstPort = binary.BigEndian.Uint16(buf[78:80])
           log.Println(fwd_udp)
 
-
           log.Println("*** new data ***")
           raw_pkt := raw.Make()
           raw_pkt.Data = buf[80:]
           log.Println(raw_pkt)
 
-
+          fwd_udp.SetPayload(raw_pkt)
+          ip4_pkt.SetPayload(fwd_udp)
+          eth_pkt.SetPayload(ip4_pkt)
 
           buf, err := layers.Pack(eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
           if err != nil {
@@ -128,17 +134,26 @@ func main() {
 
           log.Println("HERE'S THE NEW PACKET")
 
-
-          new_pkt, err := layers.UnpackAll(buf, packet.UDP)
+          new_pkt, err := layers.UnpackAll(buf, packet.Eth)
           if err != nil {
             log.Fatal(err)
           }
           log.Println(new_pkt)
 
-        } // packet contains magic number 0x56EC
+          //rsp_pkt, err := network.SendRecv(src, 0, eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
+          err = network.Send(src, eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
+          if err != nil {
+            log.Fatal(err)
+          }
+          //log.Println(rsp_pkt)
+
+        } // packet contains magic number 0x56EC, so it's a Proxy Packet
+        if ( 0x56EC != binary.BigEndian.Uint16(buf[42:44]) ) {
+          log.Println("convert!")
+        } // packet needs to become a Proxy Packet
       } // length > 44 bytes
     } // UDP packet
     
   }
-    
+
 }
