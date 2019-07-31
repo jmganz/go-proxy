@@ -66,8 +66,7 @@ func main() {
     if err != nil {
       log.Fatal(err)
     }
-    
-    
+
     // Assume Ethernet as datalink layer
     pkt, err := layers.UnpackAll(buf, packet.Eth)
     if err != nil {
@@ -80,7 +79,7 @@ func main() {
         if ( 0x56EC == binary.BigEndian.Uint16(buf[42:44]) ) {
           //log.Println(pkt)
           log.Println("START")
-/*
+
           log.Println(buf)
           log.Println("ETHERNET")
           log.Println(pkt)
@@ -160,7 +159,7 @@ func main() {
           if err != nil {
             log.Fatal(err)
           }
-*/
+
         } // packet contains magic number 0x56EC, so it's a Proxy Packet
       } // length > 44 bytes
       if ( len(buf) < 45 || 0x56EC != binary.BigEndian.Uint16(buf[42:44]) ) {
@@ -182,7 +181,7 @@ func main() {
           // buf[30:34] is dst ip
           // buf[34:36] is src port
           // buf[36:38] is dst port
-          
+
           log.Println("*** Convert Non-Proxy Packet ***")
           log.Println(buf)
           log.Println("ETHERNET")
@@ -211,6 +210,7 @@ func main() {
           ip4_pkt.IHL = (buf[14] & 0xF)
           ip4_pkt.TOS = buf[15]
           ip4_pkt.Length = binary.BigEndian.Uint16(buf[16:18]) + 38
+          log.Println("LENGTH - ", ip4_pkt.Length)
           //buf[42:44] = 0x56EC
           binary.BigEndian.PutUint16(buf[42:44], 0x56EC)
           ip4_pkt.Id = binary.BigEndian.Uint16(buf[18:20])
@@ -220,31 +220,33 @@ func main() {
           //ip4_pkt.Checksum = 0x51a9 // TODO: compute this properly
           //buf[44:60] = binary.BigEndian.Uint128(origin_ip) // client - server ip
           //binary.BigEndian.PutUint128(buf[44:60], origin_ip) // client - server ip
-          binary.BigEndian.PutUint64(buf[44:52], 0) // client - server ip
-          binary.BigEndian.PutUint64(buf[52:60], uint64(origin_ip)) // client - server ip
+          buf2 := make([]byte, ip4_pkt.Length)
+          binary.BigEndian.PutUint64(buf2[44:52], 0) // client - server ip
+          binary.BigEndian.PutUint64(buf2[52:60], uint64(origin_ip)) // client - server ip
           //buf[60:76] = binary.BigEndian.Uint128(uint64(proxy_ip)) // proxy - spectrum ip
           log.Println("good1")
-          binary.BigEndian.PutUint64(buf[60:68], 0) // client - server ip
-          binary.BigEndian.PutUint64(buf[68:76], uint64(proxy_ip)) // proxy - spectrum ip
+          binary.BigEndian.PutUint64(buf2[60:68], 0) // proxy - spectrum ip
+          binary.BigEndian.PutUint64(buf2[68:76], uint64(proxy_ip)) // proxy - spectrum ip
           //buf[76:78] = binary.BigEndian.Uint16(udp_pkt.SrcPort)
-          binary.BigEndian.PutUint16(buf[76:78], binary.BigEndian.Uint16(buf[34:36]))
+          binary.BigEndian.PutUint16(buf2[76:78], binary.BigEndian.Uint16(buf[34:36]))
           //buf[78:80] = binary.BigEndian.Uint16(udp_pkt.DstPort)
-          binary.BigEndian.PutUint16(buf[78:80], binary.BigEndian.Uint16(buf[36:38]))
-          log.Printf("client - %d.%d.%d.%d:%d\n", buf[56], buf[57], buf[58], buf[59], binary.BigEndian.Uint16(buf[76:78]))
-          log.Printf("proxy - %d.%d.%d.%d:%d\n", buf[72], buf[73], buf[74], buf[75], binary.BigEndian.Uint16(buf[78:80]))
+          binary.BigEndian.PutUint16(buf2[78:80], binary.BigEndian.Uint16(buf[36:38]))
+          log.Printf("client - %d.%d.%d.%d:%d\n", buf2[56], buf2[57], buf2[58], buf2[59], binary.BigEndian.Uint16(buf2[76:78]))
+          log.Printf("proxy - %d.%d.%d.%d:%d\n", buf2[72], buf2[73], buf2[74], buf2[75], binary.BigEndian.Uint16(buf2[78:80]))
           //ip4_pkt.SrcAddr = buf[6:12]
-          ip4_pkt.DstAddr = buf[72:76]
-          ip4_pkt.SrcAddr = buf[30:34]
+          ip4_pkt.DstAddr = buf2[72:76]
+          ip4_pkt.SrcAddr = buf2[56:60]
 
           fwd_udp := udp.Make()
           // TODO: Fix this
-          fwd_udp.SrcPort = binary.BigEndian.Uint16(buf[76:78])
-          fwd_udp.DstPort = binary.BigEndian.Uint16(buf[78:80])
+          fwd_udp.SrcPort = binary.BigEndian.Uint16(buf2[76:78])
+          fwd_udp.DstPort = binary.BigEndian.Uint16(buf2[78:80])
           log.Println(fwd_udp)
 
           log.Println("*** new data ***")
-          //raw_pkt := raw.Make()
-          raw_pkt.Data = buf[80:]
+          // raw_pkt := raw.Make()
+          // buf2[80:] = buf[42:]
+          raw_pkt.Data = buf[42:]
           log.Println(raw_pkt)
 
           fwd_udp.SetPayload(raw_pkt)
@@ -270,15 +272,10 @@ func main() {
           if err != nil {
             log.Fatal(err)
           }
-
-          err = network.Send(src, eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
-          if err != nil {
-            log.Fatal(err)
-          }
         } // if the ports match, turn it into a Proxy Packet
       } // this is not a Proxy Packet
     } // UDP packet
-    
+
   }
 
 }
