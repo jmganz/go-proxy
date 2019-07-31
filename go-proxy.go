@@ -164,7 +164,7 @@ func main() {
       } // length > 44 bytes
       if ( len(buf) < 45 || 0x56EC != binary.BigEndian.Uint16(buf[42:44]) ) {
         //var proxy_ports = []uint16 {4242, 4252, 7777, 7778, 7787, 7788}
-        proxy_ports := map[uint16]bool {4242:true, 4252:true, 7777:true, 7778:true, 7787:true, 7788:true}
+        proxy_ports := map[uint16]bool {4242:true, 4252:true, 7777:true, 7778:true, 7787:true, 7788:true, 26900:true, 26901:true, 26902:true, 26903:true, 26904:true, 26905:true, 26910:true, 26911:true, 26912:true, 26913:true, 26914:true, 26915:true, 26916:true, 26917:true, 26918:true, 26919:true, 26920:true, 27025:true, 27026:true, 27027:true, 27028:true, 27029:true, 27030:true, 27215:true, 27225:true, 32330:true, 32340:true}
         origin_ip, err := strconv.Atoi(os.Getenv("ORIGINIP"))
         if err != nil {
           log.Fatal(err)
