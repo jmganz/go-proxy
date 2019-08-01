@@ -48,18 +48,18 @@ func main() {
 */
 
   addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		log.Fatal(err)
-	}
-	//log.Println(addrs)
+  if err != nil {
+    log.Fatal(err)
+  }
+  //log.Println(addrs)
 
-	for _, a := range addrs {
-		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				//log.Println(ipnet.IP.String())
-			}
-		}
-	}
+  for _, a := range addrs {
+    if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+      if ipnet.IP.To4() != nil {
+        //log.Println(ipnet.IP.String())
+      }
+    }
+  }
 
   for {
     buf, err := src.Capture()
@@ -232,7 +232,8 @@ func main() {
           log.Printf("client - %d.%d.%d.%d:%d\n", buf2[56], buf2[57], buf2[58], buf2[59], binary.BigEndian.Uint16(buf2[76:78]))
           log.Printf("proxy - %d.%d.%d.%d:%d\n", buf2[72], buf2[73], buf2[74], buf2[75], binary.BigEndian.Uint16(buf2[78:80]))
           ip4_pkt.DstAddr = buf2[72:76]
-          ip4_pkt.SrcAddr = buf2[56:60]
+          binary.BigEndian.PutUint32(buf[30:34], uint32(origin_ip))
+          ip4_pkt.SrcAddr = buf[30:34]
 
           fwd_udp := udp.Make()
           // TODO: Fix this
@@ -276,7 +277,5 @@ func main() {
         } // if the ports match, turn it into a Proxy Packet
       } // this is not a Proxy Packet
     } // UDP packet
-
   }
-
 }
