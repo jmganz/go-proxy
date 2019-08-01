@@ -190,6 +190,12 @@ func main() {
           //log.Println("UDP")
           //log.Println(udp_pkt)
           //log.Println(string(buf[80:]))
+          log.Println("Old Packet:")
+          old_pkt, err := layers.UnpackAll(buf, packet.Eth)
+          if err != nil {
+            log.Fatal(err)
+          }
+          log.Println(old_pkt)
           log.Println("*** data ***")
           log.Println(string(buf[42:len(buf)]))
           log.Println("packet is ", len(buf), " bytes long")
@@ -215,6 +221,8 @@ func main() {
           //ip4_pkt.Checksum = 0x51a9 // TODO: compute this properly
           binary.BigEndian.PutUint64(buf2[44:52], 0) // client - server ip
           binary.BigEndian.PutUint64(buf2[52:60], uint64(origin_ip)) // client - server ip
+          binary.BigEndian.PutUint32(buf2[52:56], 0)
+          binary.BigEndian.PutUint32(buf2[56:60], binary.BigEndian.Uint32(buf[30:34])) // client - destination ip
           log.Println("good1")
           binary.BigEndian.PutUint64(buf2[60:68], 0) // proxy - spectrum ip
           binary.BigEndian.PutUint64(buf2[68:76], uint64(proxy_ip)) // proxy - spectrum ip
@@ -246,7 +254,7 @@ func main() {
           ip4_pkt.SetPayload(fwd_udp)
           eth_pkt.SetPayload(ip4_pkt)
 
-          buf2, err := layers.Pack(eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
+          buf2, err = layers.Pack(eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
           if err != nil {
             log.Fatal("Error packing: %s", err)
           }
