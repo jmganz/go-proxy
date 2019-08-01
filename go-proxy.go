@@ -191,9 +191,6 @@ func main() {
           //log.Println(udp_pkt)
           //log.Println(string(buf[80:]))
           log.Println("*** data ***")
-          raw_pkt := raw.Make()
-          raw_pkt.Data = buf[42:]
-          //log.Println(raw_pkt.Data)
           log.Println(string(buf[42:len(buf)]))
           log.Println("packet is ", len(buf), " bytes long")
           log.Println("*** FINISH ***")
@@ -209,13 +206,13 @@ func main() {
           ip4_pkt.TOS = buf[15]
           ip4_pkt.Length = binary.BigEndian.Uint16(buf[16:18]) + 38
           log.Println("LENGTH - ", ip4_pkt.Length)
-          binary.BigEndian.PutUint16(buf[42:44], 0x56EC)
+          buf2 := make([]byte, ip4_pkt.Length)
+          binary.BigEndian.PutUint16(buf2[42:44], 0x56EC)
           ip4_pkt.Id = binary.BigEndian.Uint16(buf[18:20])
           ip4_pkt.Flags = 10
           ip4_pkt.TTL = uint8(buf[22])
           ip4_pkt.Protocol = ipv4.UDP
           //ip4_pkt.Checksum = 0x51a9 // TODO: compute this properly
-          buf2 := make([]byte, ip4_pkt.Length)
           binary.BigEndian.PutUint64(buf2[44:52], 0) // client - server ip
           binary.BigEndian.PutUint64(buf2[52:60], uint64(origin_ip)) // client - server ip
           log.Println("good1")
@@ -236,8 +233,13 @@ func main() {
           log.Println(fwd_udp)
 
           log.Println("*** new data ***")
+          raw_pkt := raw.Make()
           // buf2[80:] = buf[42:]
-          raw_pkt.Data = buf[42:]
+          var index uint16
+          for index = 80; index < ip4_pkt.Length; index++ {
+            buf2[index] = buf[index - 38]
+          }
+          raw_pkt.Data = buf2[42:]
           log.Println(raw_pkt)
 
           fwd_udp.SetPayload(raw_pkt)
@@ -253,7 +255,7 @@ func main() {
           log.Println(buf2)
 
           log.Println("New Packet:")
-          new_pkt, err := layers.UnpackAll(buf, packet.Eth)
+          new_pkt, err := layers.UnpackAll(buf2, packet.Eth)
           if err != nil {
             log.Fatal(err)
           }
