@@ -12,6 +12,7 @@ import "github.com/ghedo/go.pkt/network"
 import "github.com/ghedo/go.pkt/packet"
 import "github.com/ghedo/go.pkt/packet/udp"
 import "github.com/ghedo/go.pkt/packet/ipv4"
+import "github.com/ghedo/go.pkt/packet/icmpv4"
 import "github.com/ghedo/go.pkt/packet/eth"
 import "github.com/ghedo/go.pkt/packet/raw"
 
@@ -71,7 +72,8 @@ func main() {
     }
 
     udp_pkt := layers.FindLayer(pkt, packet.UDP)
-    if (nil != udp_pkt) {
+    icmp_pkt := layers.FindLayer(pkt, packet.ICMPv4)
+    if (nil != udp_pkt || nil != icmp_pkt) {
       // Check if the source or destination port matches values we're listening on
       proxy_ports := map[uint16]bool {4242:true, 4252:true, 7777:true, 7778:true, 7787:true, 7788:true, 26900:true, 26901:true, 26902:true, 26903:true, 26904:true, 26905:true, 26910:true, 26911:true, 26912:true, 26913:true, 26914:true, 26915:true, 27015:true, 27016:true, 27017:true, 27018:true, 27019:true, 27020:true, 27025:true, 27026:true, 27027:true, 27028:true, 27029:true, 27030:true, 27215:true, 27225:true, 32330:true, 32340:true}
       correct_ports := map[uint16]bool {4242:true, 7777:true, 7778:true, 26900:true, 26901:true, 26902:true, 26903:true, 26904:true, 26905:true, 27015:true, 27016:true, 27017:true, 27018:true, 27019:true, 27020:true, 27215:true, 32330:true}
@@ -83,26 +85,60 @@ func main() {
         // buf[30:34] is dst ip
         // buf[34:36] is src port
         // buf[36:38] is dst port
+        
         srcIP := binary.BigEndian.Uint32(buf[26:30])
         dstIP := binary.BigEndian.Uint32(buf[30:34])
         srcPort := binary.BigEndian.Uint16(buf[34:36])
         dstPort := binary.BigEndian.Uint16(buf[36:38])
 
-        if (srcIP == uint32(private_ip) {
-          binary.BigEndian.PutUint32(buf[26:30], uint32(origin_ip))
+        _, highSrc := higher_ports[srcPort]
+        _, highDst := higher_ports[dstPort]
+        _, correctSrc := correct_ports[srcPort]
+        _, correctDst := correct_ports[dstPort]
+        log.Println("\n\n*** Check Ports ***")
+        if (highSrc) {
+          log.Println("SrcPort is high: ", srcPort)
+        }
+        if (highDst) {
+          log.Println("DstPort is high: ", dstPort)
+        }
+        if (correctSrc) {
+          log.Println("SrcPort is correct: ", srcPort)
+        }
+        if (correctDst) {
+          log.Println("DstPort is correct: ", dstPort)
+        }
+        log.Println("*******************\n\n")
+
+        if (srcIP == uint32(private_ip)) {
+          //binary.BigEndian.PutUint32(buf[26:30], uint32(origin_ip))
           _, matchSrcPort := proxy_ports[binary.BigEndian.Uint16(buf[36:38])]
           if (matchSrcPort) {
             
           }
-          log.Println("This packet is going OUT")
         }
+        var old_pkt packet.Packet
         if ((srcIP == uint32(origin_ip)) || (srcIP == uint32(private_ip))) {
           log.Println("This packet is going OUT")
+          if ((dstIP < uint32(proxy_ip - 123995)) || (dstIP > uint32(proxy_ip + 400293))) {
+            log.Println("Traffic wasn't going to be proxied")
+            //dstIP = proxy_ip
+            old_pkt, err = layers.UnpackAll(buf, packet.Eth)
+            if err != nil {
+              log.Fatal(err)
+            }
+            binary.BigEndian.PutUint32(buf[30:34], uint32(proxy_ip))
+            //binary.BigEndian.PutUint32(buf[26:30], uint32(proxy_ip))
+          } else {
+            log.Println("*** TRAFFIC IS BEING PROXIED ***")
+            log.Println(dstIP)
+            log.Println("********************************")
+          }
         }
         if ((dstIP == uint32(origin_ip)) || (dstIP == uint32(private_ip))) {
           log.Println("This packet is coming IN")
           // SUBTRACT 10 FROM dstPort
-          binary.BigEndian.PutUint16(buf[34:36], binary.BigEndian.Uint16(buf[34:36]) - 10) // SrcPort
+          //binary.BigEndian.PutUint16(buf[34:36], binary.BigEndian.Uint16(buf[34:36]) - 10) // SrcPort
           
         }
 
@@ -117,11 +153,9 @@ func main() {
         //log.Println(udp_pkt)
         //log.Println(string(buf[80:]))
         log.Println("Old Packet:")
-        old_pkt, err := layers.UnpackAll(buf, packet.Eth)
-        if err != nil {
-          log.Fatal(err)
+        if (old_pkt != nil) {
+          log.Println(old_pkt)
         }
-        log.Println(old_pkt)
         log.Println("*** data ***")
         log.Println(string(buf[42:len(buf)]))
         log.Println("packet is ", len(buf), " bytes long")
@@ -141,7 +175,12 @@ func main() {
         ip4_pkt.Id = binary.BigEndian.Uint16(buf[18:20])
         ip4_pkt.Flags = 10
         ip4_pkt.TTL = uint8(buf[22])
-        ip4_pkt.Protocol = ipv4.UDP
+        if (nil != udp_pkt) {
+          ip4_pkt.Protocol = ipv4.UDP
+        }
+        if (nil != icmp_pkt) {
+          ip4_pkt.Protocol = ipv4.ICMPv4
+        }
         //ip4_pkt.Checksum = 0x51a9 // TODO: compute this properly
         //binary.BigEndian.PutUint16(buf2[76:78], binary.BigEndian.Uint16(buf[34:36]) + 10) // SrcPort
         //binary.BigEndian.PutUint16(buf2[78:80], binary.BigEndian.Uint16(buf[36:38])) // DstPort
@@ -149,20 +188,43 @@ func main() {
         ip4_pkt.SrcAddr = buf[26:30]
         ip4_pkt.DstAddr = buf[30:34]
 
+
         fwd_udp := udp.Make()
-        fwd_udp.SrcPort = binary.BigEndian.Uint16(buf[34:36])
-        fwd_udp.DstPort = binary.BigEndian.Uint16(buf[36:38])
-        fwd_udp.Checksum = binary.BigEndian.Uint16(buf[38:40])
+        fwd_icmp := icmpv4.Make()
+        if (nil != udp_pkt) {
+          //fwd_udp = udp.Make()
+          fwd_udp.SrcPort = binary.BigEndian.Uint16(buf[34:36])
+          fwd_udp.DstPort = binary.BigEndian.Uint16(buf[36:38])
+          fwd_udp.Checksum = binary.BigEndian.Uint16(buf[38:40])
+        }
+        if (nil != icmp_pkt) {
+          //fwd_icmp = icmpv4.Make()
+          //fwd_icmp.SrcPort = binary.BigEndian.Uint16(buf[34:36])
+          //fwd_icmp.DstPort = binary.BigEndian.Uint16(buf[36:38])
+          fwd_icmp.Type = icmpv4.DstUnreachable
+          fwd_icmp.Checksum = binary.BigEndian.Uint16(buf[38:40])
+        }
 
         raw_pkt := raw.Make()
         if (len(buf) > 42) {
           raw_pkt.Data = buf[42:len(buf)]
         }
-        fwd_udp.SetPayload(raw_pkt)
-        ip4_pkt.SetPayload(fwd_udp)
+        if (nil != udp_pkt) {
+          fwd_udp.SetPayload(raw_pkt)
+          ip4_pkt.SetPayload(fwd_udp)
+        }
+        if (nil != icmp_pkt) {
+          fwd_icmp.SetPayload(raw_pkt)
+          ip4_pkt.SetPayload(fwd_icmp)
+        }
         eth_pkt.SetPayload(ip4_pkt)
 
-        buf, err = layers.Pack(eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
+        if (nil != udp_pkt) {
+          buf, err = layers.Pack(eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
+        }
+        if (nil != icmp_pkt) {
+          buf, err = layers.Pack(eth_pkt, ip4_pkt, fwd_icmp, raw_pkt)
+        }
 
         if err != nil {
           log.Fatal("Error packing: %s", err)
@@ -178,11 +240,16 @@ func main() {
         }
         log.Println(new_pkt)
 
-        err = network.Send(src, eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
+        if (nil != udp_pkt) {
+          err = network.Send(src, eth_pkt, ip4_pkt, fwd_udp, raw_pkt)
+        }
+        if (nil != icmp_pkt) {
+          err = network.Send(src, eth_pkt, ip4_pkt, fwd_icmp, raw_pkt)
+        }
         if err != nil {
           log.Fatal(err)
         }
       } // if the ports match, process it
-    } // UDP packet
-  }
+    } // UDP or ICMP packet
+  } // catch all packets
 }
